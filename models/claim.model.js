@@ -34,12 +34,19 @@ const claimSchema = new mongoose.Schema(
       enum: ["pending", "approved", "rejected", "matched", "review"],
       default: "pending",
     },
-    matchScore:{
-      type:Number,
+    matchScore: {
+      type: Number,
     },
-    aiReason:{
-      type:String,
+    aiReason: {
+      type: String,
+    },
+    answers: {
+      brand: { type: String },
+      color: { type: String },
+      uniqueMark: { type: String },
+      exactLocation: { type: String },
     }
+
   },
   { timestamps: true }
 );

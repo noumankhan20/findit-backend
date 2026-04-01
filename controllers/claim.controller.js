@@ -80,31 +80,79 @@ export const createClaim = async (req, res) => {
         // 🔥 Decide status
         const normalize = (text) => text?.toLowerCase().trim();
 
-        // 🔥 Start with AI score
-        let finalScore = match_score;
+        let matchCount = 0;
+        let totalChecks = 0;
 
-        // 🔒 Verification scoring
-        if (normalize(brand) === normalize(item.brand)) {
-            finalScore += 20;
+        // 🔒 Brand
+        if (brand && item.brand) {
+            totalChecks++;
+            if (normalize(item.brand).includes(normalize(brand))) {
+                matchCount++;
+            }
         }
 
-        if (normalize(color) === normalize(item.color)) {
-            finalScore += 15;
+        // 🎨 Color
+        if (color && item.color) {
+            totalChecks++;
+            if (normalize(item.color).includes(normalize(color))) {
+                matchCount++;
+            }
         }
 
-        if (normalize(item.uniqueMark)?.includes(normalize(uniqueMark))) {
-            finalScore += 25;
+        // 🧩 Unique mark
+        if (uniqueMark && item.uniqueMark) {
+            totalChecks++;
+            if (normalize(item.uniqueMark).includes(normalize(uniqueMark))) {
+                matchCount++;
+            }
         }
 
-        if (normalize(item.exactLocation)?.includes(normalize(exactLocation))) {
-            finalScore += 20;
+        // 📍 Location (LOW IMPORTANCE → optional)
+        if (exactLocation && item.exactLocation) {
+            totalChecks++;
+            if (normalize(item.exactLocation).includes(normalize(exactLocation))) {
+                matchCount++;
+            }
         }
 
+        // 🚫 Prevent negative / overflow
+        let finalScore = match_score; // start from AI
+
+        // Add based on how many matched
+        if (matchCount === 1) finalScore = Math.max(finalScore, 50);
+        if (matchCount === 2) finalScore = Math.max(finalScore, 60);
+        if (matchCount === 3) finalScore = Math.max(finalScore, 75);
+        if (matchCount >= 4) finalScore = Math.max(finalScore, 85);
+
+        // 🔥 PENALTY FOR WRONG ANSWERS
+        let penalty = 0;
+
+        if (brand && item.brand && !normalize(item.brand).includes(normalize(brand))) {
+            penalty += 15;
+        }
+
+        if (color && item.color && !normalize(item.color).includes(normalize(color))) {
+            penalty += 10;
+        }
+
+        // Apply penalty
+        finalScore = finalScore - penalty;
+
+        // Clamp
+        finalScore = Math.max(0, Math.min(finalScore, 100));
+        let wrongAnswers = 0;
+
+        if (brand && normalize(brand) !== normalize(item.brand)) wrongAnswers++;
+        if (color && normalize(color) !== normalize(item.color)) wrongAnswers++;
         // 🔥 Final decision
         let status = "review";
 
-        if (finalScore >= 80) {
-            status = "matched";
+        if (finalScore >= 85 && penalty === 0) {
+            status = "matched"; // only if no wrong answers
+        } else if (finalScore >= 50) {
+            status = "review";
+        } else {
+            status = "rejected";
         }
         // 🔹 Create claim
         const claim = await Claim.create({
@@ -148,6 +196,7 @@ export const createClaim = async (req, res) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: "Server Error" });
+        console.error("AI ERROR:", err.response?.data || err.message);
     }
 };
 
@@ -228,17 +277,17 @@ export const rejectClaim = async (req, res) => {
 };
 
 export const getClaimsMadeByMe = async (req, res) => {
-  try {
-    const claims = await Claim.find({ claimant: req.user._id })
-      .populate("item")
-      .populate("owner", "name email phone");
+    try {
+        const claims = await Claim.find({ claimant: req.user._id })
+            .populate("item")
+            .populate("owner", "name email phone");
 
-    res.status(200).json({
-      success: true,
-      data: claims,
-    });
+        res.status(200).json({
+            success: true,
+            data: claims,
+        });
 
-  } catch (error) {
-    res.status(500).json({ message: "Server Error" });
-  }
+    } catch (error) {
+        res.status(500).json({ message: "Server Error" });
+    }
 };
